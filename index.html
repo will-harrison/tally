@@ -249,7 +249,11 @@ if(CONFIGURED && window.supabase){ sb = window.supabase.createClient(SUPABASE_UR
 
 /* ---------- storage: Supabase with local fallback ---------- */
 const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
-  emit(){this.listeners.forEach(f=>f())},
+  emit(){
+    if(this.mode!=='memory'){const n=this.entries.length;
+      setStatus(n+(n===1?' entry':' entries')+(this.mode==='db'?' · saved to your account':' · saved in this browser'));}
+    this.listeners.forEach(f=>f());
+  },
 
   async init(uid){
     this.uid = uid || null;
@@ -259,7 +263,6 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
         if(error) throw error;
         this.entries = data.map(fromRow);
         this.mode='db';
-        setStatus(this.entries.length+' entries · saved to your account');
         this.emit();
         // live updates across devices
         this.channel = sb.channel('entries-'+this.uid)
@@ -271,7 +274,6 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
     // fallback: this browser only
     this.mode='local';
     try{this.entries=JSON.parse(localStorage.getItem('tally')||'[]')}catch(e){this.entries=[]}
-    setStatus(this.entries.length+' entries · saved in this browser');
     this.emit();
   },
 
@@ -280,7 +282,6 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
     const {data,error} = await sb.from('entries').select('*').order('ts',{ascending:false}).limit(5000);
     if(error) return;
     this.entries = data.map(fromRow);
-    setStatus(this.entries.length+' entries · saved to your account');
     this.emit();
   },
 
