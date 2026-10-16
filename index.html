@@ -118,6 +118,7 @@ footer code{font:500 13px var(--mono);color:var(--text);background:var(--panel);
 
 /* ---- auth ---- */
 .auth-overlay{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:20px;z-index:50}
+.auth-overlay[hidden]{display:none}
 .auth-card{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px 24px;box-shadow:0 8px 30px rgba(31,42,55,.07)}
 .auth-brand{display:flex;align-items:center;gap:10px}
 .auth-card .word{font:800 24px/1 var(--display);color:var(--navy);letter-spacing:-.6px}
@@ -301,7 +302,8 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
     if(this.mode==='db'){
       const {error} = await sb.from('entries').delete().eq('id',id);
       if(error) throw error;
-      this.entries=this.entries.filter(e=>e.id!==id); this.emit(); return;
+      // db ids are numbers; ids read from data-del attributes are strings
+      this.entries=this.entries.filter(e=>String(e.id)!==String(id)); this.emit(); return;
     }
     this.entries=this.entries.filter(e=>e.id!==id);this.saveLocal();this.emit();
   },
