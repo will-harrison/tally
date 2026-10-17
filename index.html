@@ -386,7 +386,13 @@ async function submit(raw,src){
   }
   fb.innerHTML='Logged '+parsed.map(p=>`<span class="chip">${esc(key(p))} · ${esc(fmtAmt(p.amount,p.unit))}${p.note?' · '+esc(p.note):''}</span>`).join('')+
     ` <button class="link" id="undo">Undo</button>`;
-  document.getElementById('undo').onclick=async()=>{for(const id of lastBatch)await Store.remove(id);fb.textContent='Removed.';lastBatch=[]};
+  document.getElementById('undo').onclick=async()=>{
+    // shift as each one lands so a retry skips the ones already removed
+    try{
+      while(lastBatch.length){await Store.remove(lastBatch[0]);lastBatch.shift()}
+      fb.textContent='Removed.';
+    }catch(err){fb.textContent='Could not undo: '+(err.code||err.message)}
+  };
 }
 document.getElementById('form').addEventListener('submit',e=>{e.preventDefault();const t=document.getElementById('text');const v=t.value;t.value='';submit(v,'type')});
 
@@ -620,7 +626,10 @@ function vLog(){
       <button class="link" data-del="${esc(x.id)}" aria-label="Delete entry">Delete</button></div>`).join('')}</div>`).join('');
   if(list.length>shown.length){view.insertAdjacentHTML('beforeend',`<div class="day"><button class="link" id="more">Show all ${list.length.toLocaleString()} entries</button></div>`);
     view.querySelector('#more').onclick=()=>{S.logAll=true;renderView()}}
-  view.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>Store.remove(b.dataset.del));
+  view.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    try{await Store.remove(b.dataset.del)}
+    catch(err){fb.textContent='Could not delete: '+(err.code||err.message)}
+  });
 }
 
 function renderView(){hideTip();({today:vToday,calendar:vCalendar,series:vSeries,treemap:vTreemap,cloud:vCloud,log:vLog})[S.view]()}
