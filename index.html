@@ -249,6 +249,9 @@ if(CONFIGURED && window.supabase){ sb = window.supabase.createClient(SUPABASE_UR
 
 /* ---------- storage: Supabase with local fallback ---------- */
 const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
+  // bumped on every local add/remove. A refresh that started before the latest
+  // local change is stale, so its rows must not overwrite newer state.
+  rev:0,
   emit(){
     if(this.mode!=='memory'){const n=this.entries.length;
       setStatus(n+(n===1?' entry':' entries')+(this.mode==='db'?' · saved to your account':' · saved in this browser'));}
@@ -279,8 +282,12 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
 
   async refresh(){
     if(this.mode!=='db') return;
+    const rev=this.rev, uid=this.uid;
     const {data,error} = await sb.from('entries').select('*').order('ts',{ascending:false}).limit(5000);
     if(error) return;
+    // a local add/remove (or a sign-out) landed while this fetch was in flight,
+    // so these rows are older than what we already have
+    if(this.rev!==rev || this.uid!==uid || this.mode!=='db') return;
     this.entries = data.map(fromRow);
     this.emit();
   },
@@ -292,10 +299,12 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
       const {data,error} = await sb.from('entries').insert(toRow(e,this.uid)).select().single();
       if(error) throw error;
       const row = fromRow(data);
+      this.rev++;
       this.entries.unshift(row); this.entries.sort((a,b)=>b.ts-a.ts); this.emit();
       return row.id;
     }
     const id='l'+Date.now()+Math.random().toString(36).slice(2,6);
+    this.rev++;
     this.entries.unshift({id,...e});this.entries.sort((a,b)=>b.ts-a.ts);this.saveLocal();this.emit();return id;
   },
 
@@ -303,13 +312,15 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
     if(this.mode==='db'){
       const {error} = await sb.from('entries').delete().eq('id',id);
       if(error) throw error;
+      this.rev++;
       // db ids are numbers; ids read from data-del attributes are strings
       this.entries=this.entries.filter(e=>String(e.id)!==String(id)); this.emit(); return;
     }
+    this.rev++;
     this.entries=this.entries.filter(e=>e.id!==id);this.saveLocal();this.emit();
   },
 
-  reset(){ if(this.channel){sb.removeChannel(this.channel);this.channel=null;} this.entries=[];this.uid=null;this.mode='memory'; }
+  reset(){ if(this.channel){sb.removeChannel(this.channel);this.channel=null;} this.rev++;this.entries=[];this.uid=null;this.mode='memory'; }
 };
 
 // map between app entry objects and db rows
