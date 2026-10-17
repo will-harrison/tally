@@ -310,8 +310,11 @@ const Store={entries:[],mode:'memory',uid:null,channel:null,listeners:[],
 
   async remove(id){
     if(this.mode==='db'){
-      const {error} = await sb.from('entries').delete().eq('id',id);
+      // .select() returns the deleted rows: empty means nothing was deleted
+      // (blocked by row-level security, or already gone) rather than success
+      const {data,error} = await sb.from('entries').delete().eq('id',id).select();
       if(error) throw error;
+      if(!data||!data.length) throw Object.assign(new Error('entry was not deleted'),{code:'not_deleted'});
       this.rev++;
       // db ids are numbers; ids read from data-del attributes are strings
       this.entries=this.entries.filter(e=>String(e.id)!==String(id)); this.emit(); return;
